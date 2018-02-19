@@ -1,0 +1,51 @@
+{
+  "name": "gtapi-nearest",
+  "version": "1.0.0",
+  "description": "Web Service for querying the nearest locations provided a set of coordinates.",
+  "main": "index.js",
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "chai": "^4.1.2",
+    "georedis": "^3.1.1",
+    "redis": "^2.8.0",
+    "uniqid": "^4.1.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.0.0-beta.40",
+    "babel-register": "^6.26.0",
+    "eslint": "^4.18.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-mocha": "^4.11.0",
+    "eslint-plugin-prettier": "^2.6.0",
+    "fakeredis": "^2.0.0",
+    "mocha": "^5.0.1",
+    "nyc": "^11.4.1",
+    "prettier": "^1.10.2"
+  },
+  "scripts": {
+    "test": "TEST_MODE=1 nyc mocha --require babel-core/register 'libs/**/*.test.js'",
+    "lint": "eslint lib/**"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elog08/geotools-api-nearestbigcity.git"
+  },
+  "keywords": [
+    "geoip",
+    "geolookup",
+    "georedis",
+    "ip",
+    "lookup",
+    "city",
+    "search",
+    "big",
+    "cities"
+  ],
+  "author": "Eyasu Kifle",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/elog08/geotools-api-nearestbigcity/issues"
+  },
+  "homepage": "https://github.com/elog08/geotools-api-nearestbigcity#readme"
+}
