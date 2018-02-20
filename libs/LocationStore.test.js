@@ -30,20 +30,58 @@ describe('Location', () => {
       const retrieved = await locationStore.getLoc(id);
       expect(retrieved).to.be.empty;
     });
+
+    it('resets', async () => {
+      const arrPAdds = [], limit = Math.min(sampleLocations.length, 10);
+      
+      // Add some locations
+      for (let i = 0; i < limit; i += 1) {
+        const loc = sampleLocations[i], id = `test${i}`;
+        arrPAdds.push(locationStore.addLoc(id, loc));
+      }
+
+      const added = await Promise.all(arrPAdds);
+      const arrPGets = [];
+      // Get the same locations
+      for (let i = 0; i < limit; i += 1) {
+        const id = `test${i}`;
+        arrPGets.push(locationStore.getLoc(id));
+      }
+
+      const preReset = await Promise.all(arrPGets);
+      expect(preReset).to.have.lengthOf(added.length);
+
+      // Reset the DB
+      await locationStore.reset();
+
+      // Get the same locations
+      for (let i = 0; i < limit; i += 1) {
+        const id = `test${i}`;
+        const postResetVal = await locationStore.getLoc(id);
+        expect(postResetVal).to.be.empty;
+      }
+
+      // process.exit();
+      // const retrieved = await locationStore.getLoc(id);
+      // expect(retrieved).to.be.empty;
+    });
   });
 
   describe('CRUD Batch', () => {
     let testLocs = sampleLocations;
 
-    before(() => {
-      testLocs = testLocs.map((testLoc) => [uniqid(), testLoc]);
+    before(async () => {
+      await locationStore.reset();
+      testLocs = testLocs.map(testLoc => [uniqid(), testLoc]);
     });
 
-    it('adds multiple locations', async () => await locationStore.addLocBatch(testLocs));
+    it('adds multiple locations', async () =>
+      await locationStore.addLocBatch(testLocs));
 
     it('gets multiple locations by array of ids', async () => {
       const testIds = testLocs.map(([id]) => id);
-      return await locationStore.getLocBatch(testIds);
+      const locBatches = await locationStore.getLocBatch(testIds);
+      return locBatches;
     });
 
     it('removes multiple locations by array of ids', async () => {
@@ -51,6 +89,23 @@ describe('Location', () => {
       await locationStore.delLocBatch(testIds);
       const retrieved = await locationStore.getLocBatch(testIds);
       expect(retrieved).to.be.empty;
+    });
+  });
+
+  describe('Geo Search', () => {
+    let testLocs;
+
+    before( async () => {
+      await locationStore.reset();
+      testLocs = sampleLocations.map(testLoc => [uniqid(), testLoc]);
+      return locationStore.addLocBatch(testLocs);
+    });
+
+    it('finds the nearest city for a given lat/lng', async () => {
+      // Yosemite National Park in California, USA
+      const testLatLng = { latitude: '37.863550', longitude: '-119.524658' };
+      const nearLocs = await locationStore.nearby(testLatLng);
+      expect(nearLocs[0].meta.city).to.equal('Merced');
     });
   });
 

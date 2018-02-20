@@ -20,14 +20,14 @@ class Location {
    * @param {Object} meta - Meta information
    * @memberof Location
    */
-  constructor(id, { latitude, longitude, meta = {} }) {
+  constructor(id, { latitude, longitude }, meta = {}) {
     if (!(id && latitude && longitude)) {
       throw Error('Invalid location passed');
     }
     this.id = id;
     this.latitude = latitude;
     this.longitude = longitude;
-    this.meta = {};
+    this.meta = meta;
   }
 
   get jsonString() {
@@ -79,9 +79,9 @@ class LocationStore {
    * @memberof LocationStore
    */
   async addLoc(id, obj) {
-    const loc = new Location(id, obj);
+    const loc = new Location(id, obj, obj);
     // Add metadata to redis
-    await this.redisClient.setAsync(`meta_${id}`, loc.jsonString);
+    await this.redisClient.setAsync(id, loc.jsonString);
     return new Promise((resolve, reject) => {
       // Add to geo index
       this.geoClient.addLocation(id, loc, (err, reply) => {
@@ -94,6 +94,42 @@ class LocationStore {
   }
 
   /**
+   * Find locations near latitude and longitude
+   *
+   * @param {latitude} latitude
+   * @param {longitude} longitude
+   * @returns Promise
+   * @memberof LocationStore
+   */
+  async nearby({ latitude, longitude, distance = 500000, count = 10 }) {
+    return new Promise((resolve, reject) => {
+      const options = { count, order: true, withDistances: true };
+      this.geoClient.nearby(
+        { latitude, longitude },
+        distance,
+        options,
+        (err, result) => {
+          const arrIds = result.map(res => res.key);
+          if (err) return reject(err);
+          (async () => {
+            this.redisClient.mgetAsync(arrIds).then((arrMeta) => {
+              const mapMeta = {};
+              for (let i = 0; i < arrMeta.length; i++) {
+                const key = arrIds[i];
+                mapMeta[key] = JSON.parse(arrMeta[i]);
+              }
+              const final = result.map((res) => {
+                return Object.assign({}, mapMeta[res.key], res);
+              });
+              resolve(final);
+            });
+          })();
+        }
+      );
+    });
+  }
+
+  /**
    * Adds an array of locations
    *
    * @param [{Location}] obj
@@ -101,18 +137,18 @@ class LocationStore {
    * @memberof LocationStore
    */
   async addLocBatch(arrObj) {
-    const arrLocs = arrObj.map(([id, obj]) => new Location(id, obj));
+    const arrLocs = arrObj.map(([id, obj]) => new Location(id, obj, obj));
 
     // Redis Commands
     const arrMetaCmds = arrLocs.map(({ id, jsonString }) => [
       'set',
-      `meta_${id}`,
+      id,
       jsonString,
     ]);
     const arrGeoCmds = Object.assign(
       ...arrLocs.map(({ id, latitude, longitude }) => ({
         [id]: { latitude, longitude },
-      })),);
+    })) );
 
     const pAddMeta = this.redisClient.multi(arrMetaCmds).execAsync();
     const pAddGeo = new Promise((resolve, reject) =>
@@ -178,7 +214,7 @@ class LocationStore {
    */
   async getLoc(id) {
     // Fetch meta
-    const locMeta = await this.redisClient.getAsync(`meta_${id}`);
+    const locMeta = await this.redisClient.getAsync(id);
     return new Promise((resolve, reject) => {
       // Get location
       this.geoClient.location(id, (err, reply) => {
@@ -200,7 +236,7 @@ class LocationStore {
    */
   async delLocBatch(arrId) {
     // Redis Commands
-    const arrMetaCmds = arrId.map(id => ['del', `meta_${id}`]);
+    const arrMetaCmds = arrId.map(id => ['del', id]);
 
     const pDelMeta = this.redisClient.multi(arrMetaCmds).execAsync();
     const pDelGeo = new Promise((resolve, reject) =>
@@ -209,7 +245,7 @@ class LocationStore {
           return reject(err);
         }
         return resolve(data);
-      }));
+      }),);
     const [resMeta, resGeo] = await Promise.all([pDelMeta, pDelGeo]);
     return resMeta.length === resGeo;
   }
@@ -223,7 +259,7 @@ class LocationStore {
    * @memberof LocationStore
    */
   async delLoc(id) {
-    await this.redisClient.delAsync(`meta_${id}`);
+    await this.redisClient.delAsync(id);
     return new Promise((resolve, reject) => {
       // Get location
       this.geoClient.removeLocation(id, (err, reply) => {
