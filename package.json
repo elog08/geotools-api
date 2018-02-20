@@ -24,6 +24,7 @@
     "prettier": "^1.10.2"
   },
   "scripts": {
+    "test-redis": "unset TEST_MODE && nyc mocha --require babel-core/register 'libs/**/*.test.js'",
     "test": "TEST_MODE=1 nyc mocha --require babel-core/register 'libs/**/*.test.js'",
     "lint": "eslint lib/**"
   },

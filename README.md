@@ -38,8 +38,14 @@ npm start
 ```
 ## Running the tests
 
+Using Fake Redis
 ```
-npm test
+npm test 
+```
+
+Using a local Redis
+```
+npm run test-redis
 ```
 
 ## Deployment
