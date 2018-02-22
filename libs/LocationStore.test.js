@@ -2,6 +2,7 @@ const LocationStore = require('./LocationStore');
 const { expect } = require('chai');
 const sampleLocations = require('./data/SampleLocs.json');
 const uniqid = require('uniqid');
+const _ = require('lodash');
 
 describe('Location', () => {
   let locationStore;
@@ -32,8 +33,9 @@ describe('Location', () => {
     });
 
     it('resets', async () => {
-      const arrPAdds = [], limit = Math.min(sampleLocations.length, 10);
-      
+      const arrPAdds = [], 
+      limit = Math.min(sampleLocations.length, 10);
+
       // Add some locations
       for (let i = 0; i < limit; i += 1) {
         const loc = sampleLocations[i], id = `test${i}`;
@@ -98,11 +100,13 @@ describe('Location', () => {
     before( async () => {
       await locationStore.reset();
       testLocs = sampleLocations.map(testLoc => [uniqid(), testLoc]);
+      testLocs = _.shuffle(testLocs);
       return locationStore.addLocBatch(testLocs);
     });
 
     it('finds the nearest city for a given lat/lng', async () => {
       // Yosemite National Park in California, USA
+      // Merced, CA is the closest city
       const testLatLng = { latitude: '37.863550', longitude: '-119.524658' };
       const nearLocs = await locationStore.nearby(testLatLng);
       expect(nearLocs[0].meta.city).to.equal('Merced');
