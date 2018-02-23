@@ -1,6 +1,7 @@
 const redis = process.env.TEST_MODE ? require('fakeredis') : require('redis');
 const georedis = require('georedis');
 const bluebird = require('bluebird');
+const _ = require('lodash');
 
 // Promise support for the redis client
 bluebird.promisifyAll(redis.RedisClient.prototype);
@@ -21,8 +22,9 @@ class Location {
    * @memberof Location
    */
   constructor(id, { latitude, longitude }, meta = {}) {
+    // console.log({id, latitude, longitude});
     if (!(id && latitude && longitude)) {
-      throw Error('Invalid location passed');
+      throw Error(`Invalid location passed ${ JSON.stringify({id, latitude, longitude })}`);
     }
     this.id = id;
     this.latitude = latitude;
@@ -51,8 +53,8 @@ class LocationStore {
     const {
       redisConfig = {
         host: 'localhost',
-        port: '6379',
-      },
+        port: '6379'
+      }
     } = config;
 
     // Since redis connections are async, boolean to check if connection is active
@@ -101,7 +103,9 @@ class LocationStore {
    * @returns Promise
    * @memberof LocationStore
    */
-  async nearby({ latitude, longitude, distance = 500000, count = 10 }) {
+  async nearby({
+ latitude, longitude, distance = 500000, count = 10 
+}) {
     return new Promise((resolve, reject) => {
       const options = { count, order: true, withDistances: true };
       this.geoClient.nearby(
@@ -112,19 +116,18 @@ class LocationStore {
           const arrIds = result.map(res => res.key);
           if (err) return reject(err);
           (async () => {
-            this.redisClient.mgetAsync(arrIds).then((arrMeta) => {
+            this.redisClient.mgetAsync(arrIds).then(arrMeta => {
               const mapMeta = {};
               for (let i = 0; i < arrMeta.length; i++) {
                 const key = arrIds[i];
                 mapMeta[key] = JSON.parse(arrMeta[i]);
               }
-              const final = result.map((res) => {
-                return Object.assign({}, mapMeta[res.key], res);
-              });
+              const final = result.map(res =>
+                Object.assign({}, mapMeta[res.key], res),);
               resolve(final);
             });
           })();
-        }
+        },
       );
     });
   }
@@ -137,18 +140,32 @@ class LocationStore {
    * @memberof LocationStore
    */
   async addLocBatch(arrObj) {
-    const arrLocs = arrObj.map(([id, obj]) => new Location(id, obj, obj));
+    const uniqueLocs = _.uniqWith(arrObj, (a, b) => a[0] === b[0]);
+    const dupeCt = arrObj.length - uniqueLocs.length;
+    if (uniqueLocs.length !== arrObj.length) {
+      console.warn('Duplicate IDs found!', dupeCt);
+    }
+
+    const arrLocs = uniqueLocs
+      .map(([id, obj]) => {
+        try {
+          return new Location(id, obj, obj);
+        } catch (e) {
+          console.warn(e);
+          return false;
+        }
+      })
+      .filter(locObj => !!locObj);
 
     // Redis Commands
     const arrMetaCmds = arrLocs.map(({ id, jsonString }) => [
       'set',
       id,
-      jsonString,
+      jsonString
     ]);
-    const arrGeoCmds = Object.assign(
-      ...arrLocs.map(({ id, latitude, longitude }) => ({
-        [id]: { latitude, longitude },
-    })) );
+    const arrGeoCmds = Object.assign(...arrLocs.map(({ id, latitude, longitude }) => ({
+          [id]: { latitude, longitude }
+        })),);
 
     const pAddMeta = this.redisClient.multi(arrMetaCmds).execAsync();
     const pAddGeo = new Promise((resolve, reject) =>
@@ -157,9 +174,12 @@ class LocationStore {
           return reject(err);
         }
         return resolve(data);
-      }),);
+      }) );
     const results = await Promise.all([pAddMeta, pAddGeo]);
-    return results[0].length === results[1].length;
+
+    const ctMeta = results[0].filter(r => r === 'OK').length;
+    const ctGeo = results[1];
+    return ctMeta === ctGeo;
   }
 
   /**
@@ -171,7 +191,7 @@ class LocationStore {
    */
   async getLocBatch(arrId) {
     // Redis Commands
-    const pGetMeta = this.redisClient.mgetAsync(arrId).then((arrMeta) => {
+    const pGetMeta = this.redisClient.mgetAsync(arrId).then(arrMeta => {
       const mapMeta = {};
       for (let i = 0; i < arrMeta.length; i++) {
         const key = arrId[i];
@@ -185,8 +205,7 @@ class LocationStore {
           return reject(err);
         }
         return resolve(mapLocations);
-      })
-   );
+      }), );
     const [mapMeta, mapGeo] = await Promise.all([pGetMeta, pGetGeo]);
     const arrConsolidated = [];
     const keys = Object.keys(mapMeta);
@@ -195,7 +214,7 @@ class LocationStore {
       const consolidated = Object.assign(
         {},
         JSON.parse(mapMeta[id]),
-        mapGeo[id],
+        mapGeo[id]
       );
       if (Object.keys(consolidated).length > 0) {
         arrConsolidated.push(consolidated);
