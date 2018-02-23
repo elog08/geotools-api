@@ -1,8 +1,9 @@
-const LocationStore = require('./LocationStore');
 const { expect } = require('chai');
-const sampleLocations = require('./data/SampleLocs.json');
 const uniqid = require('uniqid');
 const _ = require('lodash');
+
+const sampleLocations = require('../data/SampleLocs.json');
+const LocationStore = require('../../libs/LocationStore');
 
 describe('Location', () => {
   let locationStore;
