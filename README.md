@@ -50,16 +50,17 @@ npm run test-redis
 
 ## Deployment
 
+### via Docker Compose
 
-### Initialize Redis
+1. Install Docker Compose
+2. Customize port in docker-compose.yml
+3. `docker-compose build && docker-compose-up`
+
+### via Plain Docker
 
 ```
 docker run --name gtapi-redis -d redis
-```
-
-### Use the Docker Hub version
-```
-docker run --link gtapi-redis:redis -p 8080:8080 -d elog08/gtapi-nearestbc
+docker run --name gtapi-web --link gtapi-redis:redis -p 8080:8080 -d elog08/gtapi:latest
 ```
 
 ### Build your own image
@@ -67,7 +68,48 @@ docker run --link gtapi-redis:redis -p 8080:8080 -d elog08/gtapi-nearestbc
 Build a local image
 
 ```
-docker build -t <handle>/gtapi-nearestbc
+docker build -t yourhandle/gtapi
+```
+
+## Usage
+
+The web service accepts the following query strings on `GET /`
+
+`latitude`, `longitude` - required
+`distance` - distance in meters
+`count` - maximum number of results to return
+
+Sample request:
+
+```
+curl http://localhost:8080/?latitude=37.7749&longitude=122.4194&count=1
+```
+
+Response:
+```
+{
+   "success":true,
+   "result":[
+      {
+         "id":"cn_shn_wh",
+         "latitude":37.49997072,
+         "longitude":122.0999784,
+         "meta":{
+            "city":"Weihai",
+            "city_ascii":"Weihai",
+            "latitude":37.49997072,
+            "longitude":122.0999784,
+            "pop":356425,
+            "country":"China",
+            "country_code":"CN",
+            "iso3":"CHN",
+            "state":"Shandong"
+         },
+         "key":"cn_shn_wh",
+         "distance":41552.7934
+      }
+   ]
+}
 ```
 
 
@@ -79,14 +121,9 @@ docker build -t <handle>/gtapi-nearestbc
 ## Contributing
 Use these guidelines: https://gist.github.com/PurpleBooth/b24679402957c63ec426
 
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags
-
 ## Authors
 
 * **Eyasu Kifle** - *Initial work* - [elog08](https://github.com/elog08)
-
 
 ## License
 

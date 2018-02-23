@@ -1,0 +1,13 @@
+# This will start a node instance and link it to a redis container
+version: '3'
+services:
+  gtapi-web:
+    build: .
+    ports:
+     - "8080:8080"
+    depends_on:
+     - redis
+    links:
+     - redis-gtapi
+  gtapi-redis:
+    image: redis:latest
