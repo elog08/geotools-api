@@ -1,6 +1,4 @@
 const { readFileSync } = require('fs');
-const _async = require('async');
-
 const BigCities = JSON.parse(readFileSync('../data/BigCities.json'));
 const LocationStore = require('../libs/LocationStore');
 
