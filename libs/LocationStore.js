@@ -130,7 +130,7 @@ class LocationStore {
           (err, result) => {
             const arrIds = result.map(res => res.key);
             if (err) return reject(err);
-            if (arrIds.length < 1) return resolve(arrIds);
+            if (!arrIds || arrIds.length < 1) return resolve(arrIds);
 
             (async () => {
               this.redisClient.mgetAsync(arrIds).then(arrMeta => {
