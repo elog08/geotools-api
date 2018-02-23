@@ -1,3 +1,5 @@
+![alt text](https://api.travis-ci.org/elog08/geotools-api-nearestbigcity.svg?branch=master)
+
 # GeoTools API - Big City Look Up API
 A micro web service that finds the nearest prominent city for a given set of coordinates.
 
