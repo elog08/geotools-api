@@ -22,7 +22,6 @@ class Location {
    * @memberof Location
    */
   constructor(id, { latitude, longitude }, meta = {}) {
-    // console.log({id, latitude, longitude});
     if (!(id && latitude && longitude)) {
       throw Error(`Invalid location passed ${ JSON.stringify({id, latitude, longitude })}`);
     }
@@ -68,7 +67,11 @@ class LocationStore {
       this.ready = true;
     });
 
-    this.redisClient.on('error', () => {
+    this.redisClient.on('error', (e) => {
+      this.ready = false;
+    });
+
+    this.redisClient.on('end', (e) => {
       this.ready = false;
     });
   }
@@ -106,6 +109,9 @@ class LocationStore {
   async nearby({
  latitude, longitude, distance = 500000, count = 10 
 }) {
+    if (!this.ready) {
+      console.warn("Redis not ready, command will be queued");
+    }
     return new Promise((resolve, reject) => {
       const options = { count, order: true, withDistances: true };
       this.geoClient.nearby(
