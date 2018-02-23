@@ -27,6 +27,8 @@
     "supertest": "^3.0.0"
   },
   "scripts": {
+    "prepopulate": "cd scripts && node importBigCities.js",
+    "start": "npm run prepopulate && node index.js",
     "test-redis": "unset TEST_MODE && nyc mocha --require babel-core/register 'test/**/*.spec.js'",
     "test": "TEST_MODE=1 nyc mocha --require babel-core/register 'test/**/*.spec.js'",
     "lint": "eslint lib/**"

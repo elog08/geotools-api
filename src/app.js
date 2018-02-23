@@ -2,6 +2,8 @@ const express = require('express');
 
 const LocationStore = require('../libs/LocationStore');
 
+const { PORT = 3000, HOST = '0.0.0.0', REDIS_HOST = 'localhost' } = process.env;
+
 const app = new express();
 
 /**
@@ -25,7 +27,8 @@ app.get('/', async (req, res) => {
     res.status(400);
     res.send({
       success: false,
-      message: '[latitude, longitude] required. [count and distance] are optional',
+      message:
+        '[latitude, longitude] required. [count and distance] are optional'
     });
   } else {
     const { latitude, longitude, distance = 50000, count = 10 } = req.query;
@@ -45,10 +48,14 @@ app.get('/', async (req, res) => {
 
 let expressHandle = null;
 app.initialize = async function initialize() {
-  app.store = new LocationStore();
+  const redisConfig = { host: REDIS_HOST };
+  app.store = new LocationStore({redisConfig});
   return new Promise((resolve, reject) => {
     expressHandle = app
-      .listen(process.env.PORT || 3000, resolve)
+      .listen(PORT, HOST, () => {
+        console.info("Listening on ", {HOST, PORT});
+        resolve();
+      })
       .once('error', reject);
   });
 };

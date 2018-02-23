@@ -2,11 +2,11 @@ const { readFileSync } = require('fs');
 const BigCities = JSON.parse(readFileSync('../data/BigCities.json'));
 const LocationStore = require('../libs/LocationStore');
 
-const store = new LocationStore();
-
 const CITY_LIMIT = 10;
 const STATE_LIMIT = 5;
 
+const redisConfig = { host: process.env.REDIS_HOST || "localhost" };
+const store = new LocationStore({ redisConfig });
 /**
  * Takes a JSON object for a location
  * and returns a shortened ID base on
