@@ -23,7 +23,9 @@ class Location {
    */
   constructor(id, { latitude, longitude }, meta = {}) {
     if (!(id && latitude && longitude)) {
-      throw Error(`Invalid location passed ${ JSON.stringify({id, latitude, longitude })}`);
+      throw Error(
+        `Invalid location passed ${JSON.stringify({ id, latitude, longitude })}`
+      );
     }
     this.id = id;
     this.latitude = latitude;
@@ -65,14 +67,17 @@ class LocationStore {
     // Event handlers for connections
     this.redisClient.on('ready', () => {
       this.ready = true;
+      console.info('Redis connected');
     });
 
-    this.redisClient.on('error', (e) => {
+    this.redisClient.on('error', e => {
       this.ready = false;
+      console.error('Redis error', e.message);
     });
 
-    this.redisClient.on('end', (e) => {
+    this.redisClient.on('end', e => {
       this.ready = false;
+      console.warn('Redis disconnected');
     });
   }
 
@@ -84,18 +89,23 @@ class LocationStore {
    * @memberof LocationStore
    */
   async addLoc(id, obj) {
-    const loc = new Location(id, obj, obj);
-    // Add metadata to redis
-    await this.redisClient.setAsync(id, loc.jsonString);
-    return new Promise((resolve, reject) => {
-      // Add to geo index
-      this.geoClient.addLocation(id, loc, (err, reply) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(reply);
+    try {
+      const loc = new Location(id, obj, obj);
+      // Add metadata to redis
+      await this.redisClient.setAsync(id, loc.jsonString);
+      return new Promise((resolve, reject) => {
+        // Add to geo index
+        this.geoClient.addLocation(id, loc, (err, reply) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve(reply);
+        });
       });
-    });
+    } catch (error) {
+      console.error('LocationStore', 'addLoc', error);
+      return false;
+    }
   }
 
   /**
@@ -106,37 +116,41 @@ class LocationStore {
    * @returns Promise
    * @memberof LocationStore
    */
-  async nearby({
- latitude, longitude, distance = 500000, count = 10 
-}) {
-    if (!this.ready) {
-      console.warn("Redis not ready, command will be queued");
-    }
+  async nearby({ latitude, longitude, distance = 500000, count = 10 }) {
     return new Promise((resolve, reject) => {
-      const options = { count, order: true, withDistances: true };
-      this.geoClient.nearby(
-        { latitude, longitude },
-        distance,
-        options,
-        (err, result) => {
-          const arrIds = result.map(res => res.key);
-          if (err) return reject(err);
-          if (arrIds.length < 1) return resolve(arrIds);
+      try {
+        if (!this.ready) {
+          console.warn('Redis not ready, command will be queued');
+        }
+        const options = { count, order: true, withDistances: true };
+        this.geoClient.nearby(
+          { latitude, longitude },
+          distance,
+          options,
+          (err, result) => {
+            const arrIds = result.map(res => res.key);
+            if (err) return reject(err);
+            if (arrIds.length < 1) return resolve(arrIds);
 
-          (async () => {
-            this.redisClient.mgetAsync(arrIds).then(arrMeta => {
-              const mapMeta = {};
-              for (let i = 0; i < arrMeta.length; i++) {
-                const key = arrIds[i];
-                mapMeta[key] = JSON.parse(arrMeta[i]);
-              }
-              const final = result.map(res =>
-                Object.assign({}, mapMeta[res.key], res),);
-              resolve(final);
-            });
-          })();
-        },
-      );
+            (async () => {
+              this.redisClient.mgetAsync(arrIds).then(arrMeta => {
+                const mapMeta = {};
+                for (let i = 0; i < arrMeta.length; i++) {
+                  const key = arrIds[i];
+                  mapMeta[key] = JSON.parse(arrMeta[i]);
+                }
+                const final = result.map(res =>
+                  Object.assign({}, mapMeta[res.key], res)
+                );
+                resolve(final);
+              });
+            })();
+          }
+        );
+      } catch (error) {
+        console.error('LocationStore', 'nearby', error);
+        return false;
+      }
     });
   }
 
@@ -148,46 +162,54 @@ class LocationStore {
    * @memberof LocationStore
    */
   async addLocBatch(arrObj) {
-    const uniqueLocs = _.uniqWith(arrObj, (a, b) => a[0] === b[0]);
-    const dupeCt = arrObj.length - uniqueLocs.length;
-    if (uniqueLocs.length !== arrObj.length) {
-      console.warn('Duplicate IDs found!', dupeCt);
-    }
+    try {
+      const uniqueLocs = _.uniqWith(arrObj, (a, b) => a[0] === b[0]);
+      const dupeCt = arrObj.length - uniqueLocs.length;
+      if (uniqueLocs.length !== arrObj.length) {
+        console.warn('Duplicate IDs found!', dupeCt);
+      }
 
-    const arrLocs = uniqueLocs
-      .map(([id, obj]) => {
-        try {
-          return new Location(id, obj, obj);
-        } catch (e) {
-          console.warn(e);
-          return false;
-        }
-      })
-      .filter(locObj => !!locObj);
+      const arrLocs = uniqueLocs
+        .map(([id, obj]) => {
+          try {
+            return new Location(id, obj, obj);
+          } catch (e) {
+            console.warn(e);
+            return false;
+          }
+        })
+        .filter(locObj => !!locObj);
 
-    // Redis Commands
-    const arrMetaCmds = arrLocs.map(({ id, jsonString }) => [
-      'set',
-      id,
-      jsonString
-    ]);
-    const arrGeoCmds = Object.assign(...arrLocs.map(({ id, latitude, longitude }) => ({
+      // Redis Commands
+      const arrMetaCmds = arrLocs.map(({ id, jsonString }) => [
+        'set',
+        id,
+        jsonString
+      ]);
+      const arrGeoCmds = Object.assign(
+        ...arrLocs.map(({ id, latitude, longitude }) => ({
           [id]: { latitude, longitude }
-        })),);
+        }))
+      );
 
-    const pAddMeta = this.redisClient.multi(arrMetaCmds).execAsync();
-    const pAddGeo = new Promise((resolve, reject) =>
-      this.geoClient.addLocations(arrGeoCmds, (err, data) => {
-        if (err) {
-          return reject(err);
-        }
-        return resolve(data);
-      }) );
-    const results = await Promise.all([pAddMeta, pAddGeo]);
+      const pAddMeta = this.redisClient.multi(arrMetaCmds).execAsync();
+      const pAddGeo = new Promise((resolve, reject) =>
+        this.geoClient.addLocations(arrGeoCmds, (err, data) => {
+          if (err) {
+            return reject(err);
+          }
+          return resolve(data);
+        })
+      );
+      const results = await Promise.all([pAddMeta, pAddGeo]);
 
-    const ctMeta = results[0].filter(r => r === 'OK').length;
-    const ctGeo = results[1];
-    return ctMeta === ctGeo;
+      const ctMeta = results[0].filter(r => r === 'OK').length;
+      const ctGeo = results[1];
+      return ctMeta === ctGeo;
+    } catch (error) {
+      console.error('LocationStore', 'nearby', error);
+      return false;
+    }
   }
 
   /**
@@ -198,37 +220,43 @@ class LocationStore {
    * @memberof LocationStore
    */
   async getLocBatch(arrId) {
-    // Redis Commands
-    const pGetMeta = this.redisClient.mgetAsync(arrId).then(arrMeta => {
-      const mapMeta = {};
-      for (let i = 0; i < arrMeta.length; i++) {
-        const key = arrId[i];
-        mapMeta[key] = arrMeta[i];
-      }
-      return mapMeta;
-    });
-    const pGetGeo = new Promise((resolve, reject) =>
-      this.geoClient.locations(arrId, (err, mapLocations) => {
-        if (err) {
-          return reject(err);
+    try {
+      // Redis Commands
+      const pGetMeta = this.redisClient.mgetAsync(arrId).then( (arrMeta) => {
+        const mapMeta = {};
+        for (let i = 0; i < arrMeta.length; i++) {
+          const key = arrId[i];
+          mapMeta[key] = arrMeta[i];
         }
-        return resolve(mapLocations);
-      }), );
-    const [mapMeta, mapGeo] = await Promise.all([pGetMeta, pGetGeo]);
-    const arrConsolidated = [];
-    const keys = Object.keys(mapMeta);
-    for (let i = 0; i < keys.length; i += 1) {
-      const id = keys[i];
-      const consolidated = Object.assign(
-        {},
-        JSON.parse(mapMeta[id]),
-        mapGeo[id]
-      );
-      if (Object.keys(consolidated).length > 0) {
-        arrConsolidated.push(consolidated);
+        return mapMeta;
+      });
+      const pGetGeo = new Promise((resolve, reject) =>
+        this.geoClient.locations(arrId, (err, mapLocations) => {
+          if (err) {
+            return reject(err);
+          }
+          return resolve(mapLocations);
+        }));
+
+      const [mapMeta, mapGeo] = await Promise.all([pGetMeta, pGetGeo]);
+      const arrConsolidated = [];
+      const keys = Object.keys(mapMeta);
+      for (let i = 0; i < keys.length; i += 1) {
+        const id = keys[i];
+        const consolidated = Object.assign(
+          {},
+          JSON.parse(mapMeta[id]),
+          mapGeo[id]
+        );
+        if (Object.keys(consolidated).length > 0) {
+          arrConsolidated.push(consolidated);
+        }
       }
+      return arrConsolidated;
+    } catch (error) {
+      console.error('LocationStore', 'getLocBatch', error);
+      return false;
     }
-    return arrConsolidated;
   }
 
   /**
@@ -240,18 +268,23 @@ class LocationStore {
    * @memberof LocationStore
    */
   async getLoc(id) {
-    // Fetch meta
-    const locMeta = await this.redisClient.getAsync(id);
-    return new Promise((resolve, reject) => {
-      // Get location
-      this.geoClient.location(id, (err, reply) => {
-        if (err) {
-          return reject(err);
-        }
-        const result = Object.assign({}, JSON.parse(locMeta), reply);
-        resolve(result);
+    try {
+      // Fetch meta
+      const locMeta = await this.redisClient.getAsync(id);
+      return new Promise((resolve, reject) => {
+        // Get location
+        this.geoClient.location(id, (err, reply) => {
+          if (err) {
+            return reject(err);
+          }
+          const result = Object.assign({}, JSON.parse(locMeta), reply);
+          resolve(result);
+        });
       });
-    });
+    } catch (error) {
+      console.error('LocationStore', 'nearby', error);
+      return false;
+    }
   }
 
   /**
@@ -262,19 +295,25 @@ class LocationStore {
    * @memberof LocationStore
    */
   async delLocBatch(arrId) {
-    // Redis Commands
-    const arrMetaCmds = arrId.map(id => ['del', id]);
+    try {
+      // Redis Commands
+      const arrMetaCmds = arrId.map(id => ['del', id]);
 
-    const pDelMeta = this.redisClient.multi(arrMetaCmds).execAsync();
-    const pDelGeo = new Promise((resolve, reject) =>
-      this.geoClient.removeLocations(arrId, (err, data) => {
-        if (err) {
-          return reject(err);
-        }
-        return resolve(data);
-      }),);
-    const [resMeta, resGeo] = await Promise.all([pDelMeta, pDelGeo]);
-    return resMeta.length === resGeo;
+      const pDelMeta = this.redisClient.multi(arrMetaCmds).execAsync();
+      const pDelGeo = new Promise((resolve, reject) =>
+        this.geoClient.removeLocations(arrId, (err, data) => {
+          if (err) {
+            return reject(err);
+          }
+          return resolve(data);
+        })
+      );
+      const [resMeta, resGeo] = await Promise.all([pDelMeta, pDelGeo]);
+      return resMeta.length === resGeo;
+    } catch (error) {
+      console.error('LocationStore', 'delLocBatch', error);
+      return false;
+    }
   }
 
   /**
@@ -286,16 +325,21 @@ class LocationStore {
    * @memberof LocationStore
    */
   async delLoc(id) {
-    await this.redisClient.delAsync(id);
-    return new Promise((resolve, reject) => {
-      // Get location
-      this.geoClient.removeLocation(id, (err, reply) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(reply);
+    try {
+      await this.redisClient.delAsync(id);
+      return new Promise((resolve, reject) => {
+        // Get location
+        this.geoClient.removeLocation(id, (err, reply) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve(reply);
+        });
       });
-    });
+    } catch (error) {
+      console.error('LocationStore', 'delLoc', error);
+      return false;
+    }
   }
 
   /**
@@ -306,7 +350,12 @@ class LocationStore {
    * @memberof LocationStore
    */
   async reset() {
-    return this.redisClient.flushdb();
+    try {
+      return this.redisClient.flushdb();
+    } catch (error) {
+      console.error('LocationStore', 'reset', error);
+      return false;
+    }
   }
 
   /**
@@ -317,7 +366,12 @@ class LocationStore {
    * @memberof LocationStore
    */
   async disconnect() {
-    await this.redisClient.quit();
+    try {
+      await this.redisClient.quit();
+    } catch (error) {
+      console.error('LocationStore', 'disconnect', error);
+      return false;
+    }
   }
 }
 
