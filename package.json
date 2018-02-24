@@ -1,5 +1,5 @@
 {
-  "name": "gtapi-nearest",
+  "name": "geotools-api",
   "version": "1.0.0",
   "description": "Web Service for querying the nearest locations provided a set of coordinates.",
   "main": "index.js",
