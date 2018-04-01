@@ -117,7 +117,7 @@ class LocationStore {
    * @memberof LocationStore
    */
   async nearby({
- latitude, longitude, distance = 500000, count = 10 
+ latitude, longitude, distance = 500000, count = 10, min_population = 0,
 }) {
     return new Promise((resolve, reject) => {
       try {
@@ -141,8 +141,17 @@ class LocationStore {
                   const key = arrIds[i];
                   mapMeta[key] = JSON.parse(arrMeta[i]);
                 }
-                const final = result.map(res =>
-                  Object.assign({}, mapMeta[res.key], res),);
+                let final = result.map(res =>
+                  Object.assign({}, mapMeta[res.key], res)
+                );
+
+                // Filter
+                if (min_population > 0) {
+                  final = final.filter(
+                    ({ meta: { pop } }) => pop >= min_population
+                  );
+                }
+
                 resolve(final);
               });
             })();

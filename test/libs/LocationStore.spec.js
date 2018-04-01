@@ -112,6 +112,18 @@ describe('Location', () => {
       const nearLocs = await locationStore.nearby(testLatLng);
       expect(nearLocs[0].meta.city).to.equal('Merced');
     });
+
+    it('filters by population', async () => {
+      // Yosemite National Park in California, USA
+      // Fresno, CA is the closest city with a pop > 200000
+      const MIN_POPULATION = 200000;
+      const query = { latitude: '37.863550', longitude: '-119.524658', min_population: MIN_POPULATION };
+      const nearLocs = await locationStore.nearby(query);
+      nearLocs.forEach(loc => {
+        expect(loc.meta.pop >= MIN_POPULATION).to.be.true;
+      });
+      expect(nearLocs[0].meta.city).to.equal('Fresno');
+    });
   });
 
   after(() => {

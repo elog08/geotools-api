@@ -28,15 +28,16 @@ app.get('/', async (req, res) => {
     res.send({
       success: false,
       message:
-        '[latitude, longitude] required. [count and distance] are optional'
+        '[latitude, longitude] required. [count, min_population and distance] are optional'
     });
   } else {
-    const { latitude, longitude, distance = 50000, count = 10 } = req.query;
+    const { latitude, longitude, distance = 50000, count = 10, min_population = 0 } = req.query;
     const searchQuery = {
       latitude: parseFloat(latitude),
       longitude: parseFloat(longitude),
       distance: parseInt(distance),
       count: parseInt(count),
+      min_population: parseInt(min_population),
     };
     const result = await app.store.nearby(searchQuery);
     res.send({
