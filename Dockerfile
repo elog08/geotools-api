@@ -1,5 +1,7 @@
 FROM node:carbon
 
+MAINTAINER Eyasu Kifle <elog08.github.io>
+
 # Create app directory
 WORKDIR /usr/src/app
 
