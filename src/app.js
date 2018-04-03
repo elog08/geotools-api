@@ -22,6 +22,14 @@ function validate(req) {
   return isNumeric(latitude, longitude);
 }
 
+app.get('/_dump', async (req, res) => {
+  const result = await app.store.all();
+  res.send({
+    success: true,
+    result,
+  });
+});
+
 app.get('/', async (req, res) => {
   if (!validate(req)) {
     res.status(400);

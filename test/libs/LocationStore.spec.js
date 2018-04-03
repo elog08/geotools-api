@@ -84,7 +84,13 @@ describe('Location', () => {
     it('gets multiple locations by array of ids', async () => {
       const testIds = testLocs.map(([id]) => id);
       const locBatches = await locationStore.getLocBatch(testIds);
+
       return locBatches;
+    });
+
+    it('retrieves all locations', async () => {
+      const retieved = await locationStore.all();
+      expect(retieved.length).to.equal(testLocs.length);
     });
 
     it('removes multiple locations by array of ids', async () => {

@@ -23,7 +23,9 @@ class Location {
    */
   constructor(id, { latitude, longitude }, meta = {}) {
     if (!(id && latitude && longitude)) {
-      throw Error(`Invalid location passed ${JSON.stringify({ id, latitude, longitude })}`,);
+      throw Error(
+        `Invalid location passed ${JSON.stringify({ id, latitude, longitude })}`
+       );
     }
     this.id = id;
     this.latitude = latitude;
@@ -52,8 +54,8 @@ class LocationStore {
     const {
       redisConfig = {
         host: 'localhost',
-        port: '6379',
-      },
+        port: '6379'
+      }
     } = config;
 
     // Since redis connections are async, boolean to check if connection is active
@@ -68,12 +70,12 @@ class LocationStore {
       console.info('Redis connected');
     });
 
-    this.redisClient.on('error', (e) => {
+    this.redisClient.on('error', e => {
       this.ready = false;
       console.error('Redis error', e.message);
     });
 
-    this.redisClient.on('end', (e) => {
+    this.redisClient.on('end', e => {
       this.ready = false;
       console.warn('Redis disconnected');
     });
@@ -117,8 +119,12 @@ class LocationStore {
    * @memberof LocationStore
    */
   async nearby({
- latitude, longitude, distance = 500000, count = 10, min_population = 0,
-}) {
+       latitude,
+    longitude,
+    distance = 500000,
+    count = 10,
+    min_population = 0
+    }) {
     return new Promise((resolve, reject) => {
       try {
         if (!this.ready) {
@@ -135,27 +141,24 @@ class LocationStore {
             if (!arrIds || arrIds.length < 1) return resolve(arrIds);
 
             (async () => {
-              this.redisClient.mgetAsync(arrIds).then((arrMeta) => {
+              this.redisClient.mgetAsync(arrIds).then(arrMeta => {
                 const mapMeta = {};
                 for (let i = 0; i < arrMeta.length; i++) {
                   const key = arrIds[i];
                   mapMeta[key] = JSON.parse(arrMeta[i]);
                 }
                 let final = result.map(res =>
-                  Object.assign({}, mapMeta[res.key], res)
-                );
+                  Object.assign({}, mapMeta[res.key], res),);
 
                 // Filter
                 if (min_population > 0) {
-                  final = final.filter(
-                    ({ meta: { pop } }) => pop >= min_population
-                  );
+                  final = final.filter(({ meta: { pop } }) => pop >= min_population,);
                 }
 
                 resolve(final);
               });
             })();
-          },
+          }
         );
       } catch (error) {
         console.error('LocationStore', 'nearby', error);
@@ -194,11 +197,13 @@ class LocationStore {
       const arrMetaCmds = arrLocs.map(({ id, jsonString }) => [
         'set',
         id,
-        jsonString,
+        jsonString
       ]);
-      const arrGeoCmds = Object.assign(...arrLocs.map(({ id, latitude, longitude }) => ({
-          [id]: { latitude, longitude },
-        })),);
+      const arrGeoCmds = Object.assign(
+        ...arrLocs.map(({ id, latitude, longitude }) => ({
+        [id]: { latitude, longitude }
+      }))
+       );
 
       const pAddMeta = this.redisClient.multi(arrMetaCmds).execAsync();
       const pAddGeo = new Promise((resolve, reject) =>
@@ -207,7 +212,8 @@ class LocationStore {
             return reject(err);
           }
           return resolve(data);
-        }),);
+        })
+       );
       const results = await Promise.all([pAddMeta, pAddGeo]);
 
       const ctMeta = results[0].filter(r => r === 'OK').length;
@@ -229,7 +235,7 @@ class LocationStore {
   async getLocBatch(arrId) {
     try {
       // Redis Commands
-      const pGetMeta = this.redisClient.mgetAsync(arrId).then((arrMeta) => {
+      const pGetMeta = this.redisClient.mgetAsync(arrId).then(arrMeta => {
         const mapMeta = {};
         for (let i = 0; i < arrMeta.length; i++) {
           const key = arrId[i];
@@ -243,8 +249,7 @@ class LocationStore {
             return reject(err);
           }
           return resolve(mapLocations);
-        })
-      );
+        }),);
 
       const [mapMeta, mapGeo] = await Promise.all([pGetMeta, pGetGeo]);
       const arrConsolidated = [];
@@ -254,7 +259,7 @@ class LocationStore {
         const consolidated = Object.assign(
           {},
           JSON.parse(mapMeta[id]),
-          mapGeo[id],
+          mapGeo[id]
         );
         if (Object.keys(consolidated).length > 0) {
           arrConsolidated.push(consolidated);
@@ -296,6 +301,35 @@ class LocationStore {
   }
 
   /**
+   * Returns all meta keys in store
+   *
+   * @returns Promise
+   * @async
+   * @memberof LocationStore
+   */
+  async all(pattern = '*') {
+    try {
+      const locKeys = await this.redisClient.keysAsync(pattern);
+      if (locKeys && locKeys.length > 0) {
+        // TODO: Use prefix namespacing or separate DBs
+        // Shift out the geo-redis hash
+        locKeys.shift();
+
+        const arrMeta = await this.redisClient.mgetAsync(locKeys);
+
+        // Deserialize objects
+        const arrObj = arrMeta.map(JSON.parse);
+
+        return arrObj;
+      }
+      return [];
+    } catch (error) {
+      console.error('LocationStore', 'all', error);
+      return false;
+    }
+  }
+
+  /**
    * Deletes locations given an array of IDs
    *
    * @param [] arrId
@@ -314,7 +348,8 @@ class LocationStore {
             return reject(err);
           }
           return resolve(data);
-        }),);
+        })
+       );
       const [resMeta, resGeo] = await Promise.all([pDelMeta, pDelGeo]);
       return resMeta.length === resGeo;
     } catch (error) {

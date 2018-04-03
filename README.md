@@ -75,7 +75,9 @@ docker build -t yourhandle/gtapi
 
 ## Usage
 
-The web service accepts the following query strings on `GET /`
+The web service accepts the following query strings on 
+
+`GET /`
 
 `latitude`, `longitude` - required
 `distance` - distance in meters
@@ -112,6 +114,28 @@ Response:
       }
    ]
 }
+```
+
+`GET /_dump`
+
+Returns the entire DB. 
+*Warning* This is a very expensive operation and will block other requests.
+
+```
+{
+   "success":true,
+   "result":[
+      {...}
+    ]
+}
+```
+
+no paramaters requires
+
+Sample request:
+
+```
+curl http://localhost:8080/_bulk
 ```
 
 
